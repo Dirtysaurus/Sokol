@@ -292,6 +292,7 @@ kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);border
       </div>
       <div class="fld" id="fColorWrap" hidden>Barva<input type="color" id="fColor" value="#ffffff" style="width:100%;height:30px;padding:0;border:1px solid var(--line);border-radius:4px;background:var(--panel)"></div>
       <label class="tog"><input type="checkbox" id="fShadow"> Vrhá stíny</label>
+      <label class="tog"><input type="checkbox" id="fPass"> Prochází závěsy (mezera v závěsu)</label>
 
       <div class="lab" style="margin-top:4px" id="doorsLab">Klapky</div>
       <div class="row"><span>Horní</span><input type="range" id="dT" min="0" max="100" step="1"><span class="val" id="dTv"></span></div>
@@ -333,8 +334,6 @@ kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);border
     <div class="sec">
       <div class="lab">Efekty</div>
       <div class="row"><span>Kouř</span><input type="range" id="haze" min="0" max="100" step="1" value="0"><span class="val" id="hazeVal"></span></div>
-      <label class="tog"><input type="checkbox" id="curtainThru" checked> Světlo prochází závěsy</label>
-      <div class="note" style="margin-top:-4px">Kužel se na závěsu ukáže, ale světlo pokračuje dál. Třásně stín vrhají dál.</div>
       <div class="fld">Mapa osvětlenosti
         <select id="luxMode">
           <option value="">Vypnuto</option>
@@ -399,6 +398,10 @@ kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);border
         <input type="file" id="fileIn" accept=".json,application/json" hidden>
         <button id="btnReport">Přehled k tisku</button>
         <button id="btnDefault">Načíst výchozí nasvícení</button>
+        <div class="btns">
+          <button id="btnSetDefault">Nastavit jako výchozí</button>
+          <button id="btnFactory">Původní výchozí</button>
+        </div>
         <div class="note" id="saveMsg"></div>
         <div class="note">Rozpracovaný stav se průběžně ukládá i v prohlížeči. Soubor projektu jde otevřít také přetažením do okna.</div>
         <details>
@@ -9850,6 +9853,7 @@ const TYPES = {
   s4zoom:  { label:'Profil ETC S4 Zoom 750 W 25–50°', short:'S4Z', watts:750, lmW:29, eff:0.40, angle:30, min:25, max:50,  soft:8,  kind:'halogen', stock:2 },
   s4_26:   { label:'Profil ETC S4 26° 750 W (gobo)',  short:'S4',  watts:750, lmW:29, eff:0.42, angle:26, min:26, max:26,  soft:8,  kind:'halogen', stock:2 },
   par56:   { label:'PAR 56 MFL 300–500 W',        short:'PAR56', watts:500,  lmW:24, eff:0.55, angle:24, min:20, max:30,  soft:40, kind:'halogen', stock:4 },
+  uv:      { label:'UV zářivka (bez stmívače)',   short:'UV',    watts:40,   lm:400, eff:1,    angle:120,min:90, max:150, soft:100,kind:'uv',     stock:4 },
   par64:   { label:'PAR 64 NSP 1000 W',           short:'PAR64', watts:1000, lmW:25, eff:0.55, angle:14, min:12, max:18,  soft:40, kind:'halogen', stock:6 },
   // starší typy jen pro načtení dřívějších projektů
   profil:  { label:'Profil 750 W (S4 Zoom)', short:'PROF',  watts:750,  lmW:29, eff:0.40, angle:26, min:15, max:50, soft:8,  kind:'halogen' },
@@ -9917,6 +9921,9 @@ const fill = new THREE.DirectionalLight(0xdfe6ff, 1);
 scene.add(hemi, sun, sun.target, fill, fill.target);
 // pracovní světlo vrhá stíny jen od kulis a závěsů (vrstva 31); stěny a střecha sálu ho nezastaví
 const WORK_LAYER = 31;
+// závěsy jsou na vlastní vrstvě: stín od nich vidí jen svítidla, která závěsem neprocházejí
+const CURTAIN_LAYER = 26;
+camera.layers.enable(CURTAIN_LAYER);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.03;
@@ -10046,14 +10053,17 @@ function photometry(f, lvl = levelOf(f)){
     const U = Math.pow(L, 0.6);
     flux = baseLm * Math.pow(U, 3.4); power = f.watts * Math.pow(U, 1.6); kelvin = 3200 * Math.pow(Math.max(U, 0.05), 0.42);
   } else {
-    flux = baseLm * L; power = L > 0 ? f.watts * (0.08 + 0.92 * L) : 0; kelvin = T.kind === 'ledw' ? 3200 : 5600;
+    flux = baseLm * L; power = L > 0 ? (T.kind === 'uv' ? f.watts : f.watts * (0.08 + 0.92 * L)) : 0; kelvin = T.kind === 'ledw' ? 3200 : 5600;
   }
   const filt = FILTERS[f.filter] || FILTERS.none;
   const fcol = new THREE.Color(f.filter === 'custom' ? f.color : filt.hex);
   const half = THREE.MathUtils.degToRad(f.angle / 2);
   const sr = 2 * Math.PI * (1 - Math.cos(half));
   let cd = flux * filt.t / sr, col;
-  if (T.kind === 'led'){
+  if (T.kind === 'uv'){
+    col = new THREE.Color('#7b2dff');
+    cd = flux / sr;
+  } else if (T.kind === 'led'){
     col = new THREE.Color(f.color || '#ffffff');
     const lum = 0.2126 * col.r + 0.7152 * col.g + 0.0722 * col.b;
     cd = flux * Math.max(lum, 0.02) / sr;
@@ -10092,7 +10102,8 @@ function buildFaders(){
     const d = document.createElement('div'); d.className = 'fd used direct';
     const who = fixtures.filter(f => f.ch === 0).map(f => f.name).join(', ');
     d.title = 'Bez stmívače: ' + who;
-    d.innerHTML = '<span class="n">P</span><span class="v" id="directv"></span><button id="directBtn"></button><span class="who">přímo</span>';
+    const allUV = fixtures.filter(f => f.ch === 0).every(f => TYPES[f.type].kind === 'uv');
+    d.innerHTML = '<span class="n">' + (allUV ? 'UV' : 'P') + '</span><span class="v" id="directv"></span><button id="directBtn"></button><span class="who">' + (allUV ? 'zap/vyp' : 'přímo') + '</span>';
     wrap.appendChild(d);
     $('directBtn').addEventListener('click', () => { directOn = !directOn; channelsChanged(); });
   }
@@ -10311,9 +10322,10 @@ function assignLayers(){
   let k = 1;
   fixtures.forEach(f => {
     if (!f._light) return;
-    const L = f.shadow ? Math.min(29, k++) : 30;
+    const L = f.shadow ? Math.min(25, k++) : 30;
     SIDES.forEach(sd => f._plates[sd].layers.set(L));
     const cam = f._light.shadow.camera; cam.layers.set(0); if (f.shadow) cam.layers.enable(L);
+    if (!f.pass) cam.layers.enable(CURTAIN_LAYER);
   });
 }
 // tan hrany paprsku na dané straně po zasunutí klapky (c = 0..1)
@@ -10329,6 +10341,7 @@ function fixtureBasis(f, dir){
 }
 const _p = new THREE.Vector3(), _t = new THREE.Vector3(), _dir = new THREE.Vector3();
 const _ray = new THREE.Raycaster();
+_ray.layers.enable(CURTAIN_LAYER);
 function beamLength(f, from, dir, dist){
   const key = f.pos.join() + '|' + f.target.join();
   if (key === f._beamKey) return f._beamLen;
@@ -10336,7 +10349,7 @@ function beamLength(f, from, dir, dist){
   if (modelRoot){
     _ray.set(from, dir); _ray.far = 30;
     const hits = _ray.intersectObject(modelRoot, true);
-    for (const h of hits){ let n = h.object, ok = true; while (n){ if (!n.visible || (curtainThru && curtainNodes.has(n))){ ok = false; break; } n = n.parent; } if (ok && h.distance > 0.3){ len = h.distance; break; } }
+    for (const h of hits){ let n = h.object, ok = true; while (n){ if (!n.visible || (f.pass && curtainNodes.has(n))){ ok = false; break; } n = n.parent; } if (ok && h.distance > 0.3){ len = h.distance; break; } }
   }
   f._beamKey = key; f._beamLen = Math.min(len, 30);
   return f._beamLen;
@@ -10829,106 +10842,108 @@ function stockWarnings(){
 }
 
 // ================= výchozí nasvícení =================
-// Výchozí rozmístění podle pravidel sálu a světelného plánu z poznámek:
-//  - hlavní rampa (most u portálu, 8 zásuvek): 4 zóny Z1–Z4 po 4000 × 2500 mm, každá 2× FHR 500 z opačných stran,
-//    2× FHR „K“ křížem jako základní hladina, k tomu barevné plochy, speciály a barevné kruhy (vše svítí na jeviště),
-//  - rampa 2 m za portálem se nepoužívá, její 4 zásuvky napájí průvany na stojanech v bočních průchodech,
-//  - malé rampy v hledišti = přední lišty L a P, každá 2× FHR 500 křížem na protější půlku forbíny,
-//  - zásuvky na bočních stěnách (2 + 2) napájí protisvětla ve vzadních rozích, zásuvky na zadní stěně barevné vany u horizontu,
-//  - 4 kanály bez zásuvky přes prodlužku.
-// Jedna zásuvka = jeden kanál. Kanály jsou na stmívačích rozložené tak, aby fáze byly vyrovnané.
+// Výchozí rozmístění podle domluvy (zásuvky podle nákresu, polohy podle modelu):
+//  - most u portálu (8 zásuvek, max. 12 světel): zóny Z1–Z4 (2× FHR 500 na zásuvku), K vlevo/vpravo (1× FHR 500), 2 zásuvky volné,
+//  - pod mostem UV zářivky po šířce portálu, bez stmívače (zap/vyp),
+//  - krátká rampa 2 m za portálem (4 zásuvky): kontra na přední zóny L/P (1× FHR 1000), barva shora A/B (1× PAR 56),
+//  - rampy v hledišti (1 + 1 zásuvka): přední lišty 2× FHR 500 křížem na protější půlku forbíny,
+//  - boční stěny, přední zásuvky: průvany PAR 56 300 W, svítí skrz mezeru v bočním závěsu; zadní zásuvky volné,
+//  - zadní stěna (2 zásuvky): protisvětla 1× FHR 1000 nahoře mezi zadním závěsem a nízkou šálou, strmě na zadní zóny,
+//  - 4 kanály přes prodlužku volné.
+// Kanály rozložené na stmívače tak, aby i vše na 100 % zůstalo pod 20 A na fázi.
 // Souřadnice jeviště: d hloubka od hrany (+ dozadu), s strana (+ vpravo z hlediště), h výška nad podlahou jeviště.
 function defaultProject(){
   const F = [];
   const add = (name, type, ch, p, t, o = {}) => {
     const T = TYPES[type];
     F.push(Object.assign({ id: newId(), name, type, ch, watts: T.watts, angle: T.angle, soft: T.soft, filter: 'none', color: '#ffffff',
-      shadow: false, pos: fromStage(...p).toArray().map(v => +v.toFixed(3)), target: fromStage(...t).toArray().map(v => +v.toFixed(3)) }, o));
+      shadow: false, pass: false, pos: fromStage(...p).toArray().map(v => +v.toFixed(3)), target: fromStage(...t).toArray().map(v => +v.toFixed(3)) }, o));
   };
-  const M = (s) => [0.1, s, 3.48];         // most u portálu
-  // --- Hlavní rampa: zóny (kanály 1–4), přední zóny 0–2,5 m, zadní 2,5–5 m, levá/pravá půlka ---
+  const M = (s) => [0.1, s, 3.48];    // most u portálu
+  const R2 = (s) => [2.0, s, 3.48];   // krátká rampa 2 m za portálem
+  // Most: zóny (kanály 1–4)
   add('Z1 levá přední A',  'pc500', 1, M(-3.8), [1.25, -2, 1.0], { angle: 48, shadow: true });
-  add('Z1 levá přední B',  'pc500', 1, M(-0.3), [1.25, -2, 1.0], { angle: 48 });
+  add('Z1 levá přední B',  'pc500', 1, M(-0.3), [1.25, -2, 1.0], { angle: 48, filter: 'L203' });
   add('Z2 levá zadní A',   'pc500', 2, M(-3.4), [3.75, -2, 1.0], { angle: 40, shadow: true });
-  add('Z2 levá zadní B',   'pc500', 2, M(-0.7), [3.75, -2, 1.0], { angle: 40 });
-  add('Z3 pravá přední A', 'pc500', 3, M( 3.6), [1.25,  2, 1.0], { angle: 48, shadow: true });
+  add('Z2 levá zadní B',   'pc500', 2, M(-0.7), [3.75, -2, 1.0], { angle: 40, filter: 'L203' });
+  add('Z3 pravá přední A', 'pc500', 3, M( 3.6), [1.25,  2, 1.0], { angle: 48, shadow: true, filter: 'L203' });
   add('Z3 pravá přední B', 'pc500', 3, M( 0.3), [1.25,  2, 1.0], { angle: 48 });
-  add('Z4 pravá zadní A',  'pc500', 4, M( 3.2), [3.75,  2, 1.0], { angle: 40, shadow: true });
+  add('Z4 pravá zadní A',  'pc500', 4, M( 3.2), [3.75,  2, 1.0], { angle: 40, shadow: true, filter: 'L203' });
   add('Z4 pravá zadní B',  'pc500', 4, M( 0.7), [3.75,  2, 1.0], { angle: 40 });
-  // K křížem (kanály 5, 6)
+  // Most: K křížem (kanály 5, 6)
   add('K levé (na pravou půlku)', 'pc500', 5, M(-2.4), [2.5,  2, 0.8], { angle: 55 });
   add('K pravé (na levou půlku)', 'pc500', 6, M( 2.4), [2.5, -2, 0.8], { angle: 55 });
-  // Barevné plochy shora přes celé jeviště (kanály 7, 8)
-  add('Plocha modrá L',   'pc1000', 7, M(-1.9), [2.5, -2, 0.5], { angle: 55, filter: 'L132' });
-  add('Plocha modrá P',   'pc1000', 7, M( 1.6), [2.5,  2, 0.5], { angle: 55, filter: 'L132' });
-  add('Plocha červená L', 'pc1000', 8, M(-1.5), [2.5,  2, 0.5], { angle: 55, filter: 'L106' });
-  add('Plocha červená P', 'pc1000', 8, M( 2.0), [2.5, -2, 0.5], { angle: 55, filter: 'L106' });
-  // --- Průvany na stojanech v bočních průchodech, zásuvky u rampy 2 (kanály 9, 10, 13, 14) ---
-  add('Průvan L přední', 'par64', 9,  [1.25, -3.85, 2.0], [1.25,  2, 1.2], { filter: 'L201', shadow: true });
-  add('Průvan L zadní',  'par64', 10, [3.75, -3.85, 2.0], [3.75,  2, 1.2], { filter: 'L201' });
-  add('Průvan P přední', 'par64', 13, [1.25,  3.85, 2.0], [1.25, -2, 1.2], { filter: 'L147', shadow: true });
-  add('Průvan P zadní',  'par64', 14, [3.75,  3.85, 2.0], [3.75, -2, 1.2], { filter: 'L147' });
-  // --- Přední lišty v hledišti (malé rampy), křížem na protější půlku forbíny (kanály 11, 12) ---
-  add('Lišta L A', 'pc500', 11, [-5.7, -5.5,  1.85], [-0.5, 1.2, 1.0], { angle: 16, shadow: true });
-  add('Lišta L B', 'pc500', 11, [-5.7, -6.0,  1.85], [-0.5, 3.0, 1.0], { angle: 16 });
-  add('Lišta P A', 'pc500', 12, [-5.7,  4.95, 1.85], [-0.5, -1.2, 1.0], { angle: 16, shadow: true });
-  add('Lišta P B', 'pc500', 12, [-5.7,  5.45, 1.85], [-0.5, -3.0, 1.0], { angle: 16 });
-  // --- Protisvětla ze zadních rohů na stojanech 3,2 m, zásuvky na bočních stěnách (kanály 15–18) ---
-  add('Protisvětlo L bílé A', 'pc1000', 15, [4.7, -3.7, 3.2], [1.25, -1.5, 1.2], { angle: 32, filter: 'L202', shadow: true });
-  add('Protisvětlo L bílé B', 'pc1000', 15, [4.7, -3.4, 3.2], [1.25,  1.8, 1.2], { angle: 32, filter: 'L202' });
-  add('Protisvětlo L barva',  'par64',  16, [4.7, -3.0, 3.2], [2.0,  1.0, 0.5], { filter: 'L119' });
-  add('Protisvětlo P bílé A', 'pc1000', 17, [4.7,  3.7, 3.2], [1.25,  1.5, 1.2], { angle: 32, filter: 'L202', shadow: true });
-  add('Protisvětlo P bílé B', 'pc1000', 17, [4.7,  3.4, 3.2], [1.25, -1.8, 1.2], { angle: 32, filter: 'L202' });
-  add('Protisvětlo P barva',  'par64',  18, [4.7,  3.0, 3.2], [2.0, -1.0, 0.5], { filter: 'L106' });
-  // --- Speciály na mostě přes prodlužku (kanály 19, 20) ---
-  add('Speciál střed (gobo)', 's4_26', 19, M(0.1),   [2.5, 0, 0.9], { shadow: true });
-  add('Speciál forbína',      's4_26', 20, M(-0.95), [-0.4, 0, 1.0]);
-  // --- Horizont: vany na zemi před zadním závěsem, zásuvky na zadní stěně (kanály 21, 22) ---
-  add('Horizont modrá L', 'chr1000',  21, [4.5, -2.0, 0.3], [4.9, -2.0, 2.8], { filter: 'L132' });
-  add('Horizont modrá P', 'chr1000',  21, [4.5,  2.0, 0.3], [4.9,  2.0, 2.8], { filter: 'L132' });
-  add('Horizont zelená L','vana1000', 22, [4.5, -1.0, 0.3], [4.9, -1.0, 2.8], { filter: 'L139' });
-  add('Horizont zelená P','vana1000', 22, [4.5,  1.0, 0.3], [4.9,  1.0, 2.8], { filter: 'L139' });
-  // --- Barevné kruhy z mostu, PAR 56 přes prodlužku (kanály 23, 24) ---
-  add('Kruh žlutý L',     'par56', 23, M(-2.8), [2.0, -1.5, 0], { filter: 'L101' });
-  add('Kruh žlutý P',     'par56', 23, M( 2.8), [2.0,  1.5, 0], { filter: 'L101' });
-  add('Kruh levandule L', 'par56', 24, M(-1.2), [3.6, -1.0, 0], { filter: 'L136' });
-  add('Kruh levandule P', 'par56', 24, M( 1.2), [3.6,  1.0, 0], { filter: 'L136' });
-  // Cue = celé světlo naráz na odstupňovaných úrovních, aby byl vidět nelineární průběh stmívání halogenu.
+  // Pod mostem: UV zářivky, bez stmívače
+  [-3, -1, 1, 3].forEach((s, i) => add('UV zářivka ' + (i + 1), 'uv', 0, [0.25, s, 3.15], [2.4, s, 0], {}));
+  // Rampy v hledišti: přední lišty (kanály 7, 9)
+  add('Lišta L A', 'pc500', 7, [-5.7, -5.5,  1.85], [-0.5,  1.2, 1.0], { angle: 16, shadow: true });
+  add('Lišta L B', 'pc500', 7, [-5.7, -6.0,  1.85], [-0.5,  3.0, 1.0], { angle: 16 });
+  add('Lišta P A', 'pc500', 9, [-5.7,  4.95, 1.85], [-0.5, -1.2, 1.0], { angle: 16, shadow: true });
+  add('Lišta P B', 'pc500', 9, [-5.7,  5.45, 1.85], [-0.5, -3.0, 1.0], { angle: 16 });
+  // Krátká rampa: kontra na přední zóny (kanály 8, 10), 1× FHR 1000 (FHR 500 už všechny visí)
+  add('Kontra přední L', 'pc1000', 8,  R2(-2.0), [1.0, -2.0, 1.2], { angle: 50, filter: 'L202', shadow: true });
+  add('Kontra přední P', 'pc1000', 10, R2( 2.0), [1.0,  2.0, 1.2], { angle: 50, filter: 'L202', shadow: true });
+  // Zadní stěna: protisvětla nahoře za nízkou šálou, 1× FHR 1000 na zásuvku, strmě na zadní zóny (kanály 11, 12)
+  add('Protisvětlo L', 'pc1000', 11, [4.3, -1.8, 3.9], [3.0, -1.4, 1.2], { angle: 55, filter: 'L203', shadow: true });
+  add('Protisvětlo P', 'pc1000', 12, [4.3,  1.8, 3.9], [3.0,  1.4, 1.2], { angle: 55, filter: 'L203', shadow: true });
+  // Boční stěny: průvany PAR 56 300 W skrz mezeru v bočním závěsu (kanály 13, 17)
+  add('Průvan L', 'par56', 13, [2.5, -4.6, 1.8], [2.5,  2.5, 1.3], { watts: 300, filter: 'L201', pass: true, shadow: true });
+  add('Průvan P', 'par56', 17, [2.0,  4.6, 1.8], [2.0, -2.5, 1.3], { watts: 300, filter: 'L147', pass: true, shadow: true });
+  // Krátká rampa: barva shora A a B, 1× PAR 56 na zásuvku (víc PAR 56 skladem není) (kanály 21, 22)
+  add('Barva A', 'par56', 21, R2(-1.0), [2.2, -0.8, 0], { angle: 30, filter: 'L132' });
+  add('Barva B', 'par56', 22, R2( 1.0), [2.2,  0.8, 0], { angle: 30, filter: 'L106' });
+
+  // Cue = celé světlo naráz na odstupňovaných úrovních (nelineární průběh stmívání halogenu)
+  const used = [...new Set(F.filter(f => f.ch > 0).map(f => f.ch))];
+  const flat = v => { const a = new Array(NCH).fill(0); used.forEach(c => a[c - 1] = v); return a; };
   const steps = [100, 75, 50, 30, 15, 5];
-  const flat = v => new Array(NCH).fill(v);
   return {
     verze: 2, nazev: 'Výchozí nasvícení',
     svitidla: F,
-    kanaly: flat(50), gm: 100, prime: false,
+    kanaly: flat(100), gm: 100, prime: false,
     elektro: elec,
     cue: steps.map(v => ({ name: 'Vše ' + v + ' %', time: 3, scene: null, levels: flat(v) })),
-    aktualniCue: 2
+    aktualniCue: 0
   };
 }
+$('btnSetDefault').addEventListener('click', () => {
+  store.set('userDefault', serial());
+  $('saveMsg').textContent = 'Aktuální stav je nastavený jako výchozí v tomhle prohlížeči. Načteš ho tlačítkem Načíst výchozí nasvícení.';
+});
+let factArm = 0;
+$('btnFactory').addEventListener('click', () => {
+  const now = performance.now();
+  if (now - factArm > 4000){ factArm = now; $('btnFactory').textContent = 'Klikni znovu'; setTimeout(() => { $('btnFactory').textContent = 'Původní výchozí'; }, 4000); return; }
+  factArm = 0; $('btnFactory').textContent = 'Původní výchozí';
+  store.set('userDefault', null);
+  loadProject(defaultProject());
+  $('saveMsg').textContent = 'Vaše výchozí smazáno, načteno původní výchozí nasvícení.';
+});
 let resetArm = 0;
 $('btnDefault').addEventListener('click', () => {
   const now = performance.now();
   if (now - resetArm > 4000){ resetArm = now; $('btnDefault').textContent = 'Opravdu přepsat? Klikni znovu'; setTimeout(() => { $('btnDefault').textContent = 'Načíst výchozí nasvícení'; }, 4000); return; }
   resetArm = 0; $('btnDefault').textContent = 'Načíst výchozí nasvícení';
-  loadProject(defaultProject());
-  $('saveMsg').textContent = 'Načteno výchozí nasvícení: ' + fixtures.length + ' svítidel, ' + cues.length + ' cue.';
+  const ud = store.get('userDefault', null);
+  loadProject(ud && Array.isArray(ud.svitidla) ? ud : defaultProject());
+  $('saveMsg').textContent = 'Načteno ' + (ud ? 'vaše výchozí' : 'původní výchozí') + ' nasvícení: ' + fixtures.length + ' svítidel, ' + cues.length + ' cue.';
 });
 
 
 // ================= závěsy propouštějí světlo =================
-let curtainThru = true;
+// závěsy se přesunou na vlastní vrstvu; svítidlo s volbou „Prochází závěsy“ je ve stínech nevidí
 const curtainNodes = new Set();
 function applyCurtains(){
-  curtainThru = $('curtainThru').checked;
   curtainNodes.clear();
   for (const [name, o] of Object.entries(objects)){
     if (!/^zavesy_/.test(name)) continue;
     curtainNodes.add(o.node);
-    o.node.traverse(m => { if (m.isMesh) m.castShadow = !curtainThru; });
+    o.node.traverse(m => { if (m.isMesh){ m.castShadow = true; m.layers.set(CURTAIN_LAYER); m.layers.enable(WORK_LAYER); } });
   }
+  assignLayers();
   fixtures.forEach(f => { f._beamKey = ''; updateFixture(f); });
 }
-$('curtainThru').addEventListener('change', () => { store.set('curtainThru', $('curtainThru').checked); applyCurtains(); });
+$('fPass').addEventListener('change', () => { const f = selectedFx; if (!f) return; f.pass = $('fPass').checked; f._beamKey = ''; assignLayers(); updateFixture(f); save(); });
 
 // ================= kouř =================
 let haze = 0;
@@ -11030,10 +11045,11 @@ function renderEditor(){
   $('fSoft').value = f.soft;
   $('fWatts').value = f.watts;
   $('fFilter').value = f.filter;
-  $('fFilter').disabled = T.kind === 'led';
+  $('fFilter').disabled = T.kind === 'led' || T.kind === 'uv';
   $('fColorWrap').hidden = !(T.kind === 'led' || f.filter === 'custom');
   $('fColor').value = f.color || '#ffffff';
   $('fShadow').checked = !!f.shadow;
+  $('fPass').checked = !!f.pass;
   fillPosFields();
   syncEditorLevel();
   syncDoors();
@@ -11093,7 +11109,8 @@ $('fType').addEventListener('change', () => {
   const T = TYPES[$('fType').value];
   if (T.stock && freeOf($('fType').value, f) <= 0){ $('fType').value = f.type; flash('Tento typ už nemáte volný.'); return; }
   f.type = $('fType').value; f.watts = T.watts; f.angle = T.angle; f.soft = T.soft;
-  if (T.kind === 'led') f.filter = 'none';
+  if (T.kind === 'led' || T.kind === 'uv') f.filter = 'none';
+  if (T.kind === 'uv') f.ch = 0;
   updateFixture(f); renderFxList(); renderEditor(); save();
 });
 $('fShadow').addEventListener('change', () => {
@@ -11142,7 +11159,7 @@ $('btnDup').addEventListener('click', () => {
   if (TYPES[s.type].stock && freeOf(s.type) <= 0){ flash('Další kus typu ' + TYPES[s.type].label + ' už není skladem.'); return; }
   if (fixtures.length >= MAX_FIX){ flash('Maximum je ' + MAX_FIX + ' svítidel.'); return; }
   const f = { id:newId(), name:nextName(s.type), type:s.type, ch:s.ch, watts:s.watts, angle:s.angle, soft:s.soft, filter:s.filter, color:s.color,
-              shadow: s.shadow && shadowCount() < MAX_SHADOWS, doors:{ ...s.doors }, pos:s.pos.slice(), target:s.target.slice() };
+              shadow: s.shadow && shadowCount() < MAX_SHADOWS, pass: !!s.pass, doors:{ ...s.doors }, pos:s.pos.slice(), target:s.target.slice() };
   f.pos[2] -= 0.5; f.target[2] -= 0.5;
   fixtures.push(f); buildFixture(f); buildFaders(); selectFx(f); save();
 });
@@ -11184,7 +11201,7 @@ function serial(){
     verze: 2,
     nazev: $('projName').value.trim(),
     svitidla: fixtures.map(f => ({ id:f.id, name:f.name, type:f.type, ch:f.ch, watts:f.watts, angle:f.angle, soft:f.soft, filter:f.filter, color:f.color,
-      shadow:f.shadow, doors:{ ...f.doors }, pos:f.pos.map(v => +v.toFixed(3)), target:f.target.map(v => +v.toFixed(3)) })),
+      shadow:f.shadow, pass:!!f.pass, doors:{ ...f.doors }, pos:f.pos.map(v => +v.toFixed(3)), target:f.target.map(v => +v.toFixed(3)) })),
     kanaly: chLevels.map(v => Math.round(v)),
     elektro: elec,
     gm: Math.round(gm),
@@ -11213,7 +11230,7 @@ function loadProject(d){
     const f = { id: raw.id || newId(), name: String(raw.name || nextName(raw.type)), type: raw.type,
       ch: +raw.ch === 0 ? 0 : (raw.ch >= 1 && raw.ch <= NCH ? +raw.ch : freeChannel()), watts: +raw.watts || T.watts,
       angle: +raw.angle || T.angle, soft: raw.soft ?? T.soft, filter: FILTERS[raw.filter] ? raw.filter : 'none', color: raw.color || '#ffffff',
-      shadow: !!raw.shadow, doors: raw.doors && typeof raw.doors === 'object' ? { t:+raw.doors.t||0, b:+raw.doors.b||0, l:+raw.doors.l||0, r:+raw.doors.r||0, rot:+raw.doors.rot||0 } : null,
+      shadow: !!raw.shadow, pass: !!raw.pass, doors: raw.doors && typeof raw.doors === 'object' ? { t:+raw.doors.t||0, b:+raw.doors.b||0, l:+raw.doors.l||0, r:+raw.doors.r||0, rot:+raw.doors.rot||0 } : null,
       pos: raw.pos.map(Number), target: raw.target.map(Number) };
     if (raw.level !== undefined && !(d && d.kanaly) && f.ch) chLevels[f.ch - 1] = Math.max(0, Math.min(100, +raw.level || 0)); // starší formát
     if (f.shadow && shadowCount() >= MAX_SHADOWS) f.shadow = false;
@@ -11304,14 +11321,15 @@ Promise.all([
   syncInputs();
   setupLux();
   $('eMode').value = store.get('eMode', 'now');
-  $('curtainThru').checked = store.get('curtainThru', true); applyCurtains();
+  applyCurtains();
   $('haze').value = store.get('haze', 0); haze = +$('haze').value / 100; $('hazeVal').textContent = $('haze').value + ' %';
   $('luxMode').value = store.get('lux', ''); luxModeChanged();
   const proj = store.get('projekt', null);
   const old = store.get('fixtures', null);
   // prázdný uložený projekt (bez svítidel) nahradí výchozí nasvícení
   const hasProj = proj && Array.isArray(proj.svitidla) && proj.svitidla.length;
-  loadProject(hasProj ? proj : (old && old.length ? { svitidla: old } : defaultProject()));
+  const ud = store.get('userDefault', null);
+  loadProject(hasProj ? proj : (old && old.length ? { svitidla: old } : (ud && Array.isArray(ud.svitidla) ? ud : defaultProject())));
 }).catch(err => { $('load').textContent = 'Model se nepodařilo načíst: ' + err.message; });
 
 // ================= ovládání =================
@@ -11339,6 +11357,7 @@ function syncInputs(){
 
 // ================= klikání v náhledu =================
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+ray.layers.enable(CURTAIN_LAYER);
 let downAt = null;
 canvas.addEventListener('pointerdown', e => { downAt = [e.clientX, e.clientY]; });
 canvas.addEventListener('pointerup', e => {
@@ -11395,7 +11414,7 @@ function updateWallPlane(){
   wallPlane.setFromNormalAndCoplanarPoint(fwd, q);
 }
 
-window.__sim = { THREE, scene, renderer, camera, controls, get fixtures(){ return fixtures; }, get cues(){ return cues; }, objects, loadOf, levelsFull };
+window.__sim = { defaultProject, THREE, scene, renderer, camera, controls, get fixtures(){ return fixtures; }, get cues(){ return cues; }, objects, loadOf, levelsFull };
 renderer.setAnimationLoop(now => {
   stepFade(now); controls.update(); updateWallPlane();
   if (luxDirty && luxMesh && luxMesh.visible && now - luxLast > 120){ luxDirty = false; luxLast = now; computeLux(); }
