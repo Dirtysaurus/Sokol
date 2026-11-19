@@ -109,10 +109,11 @@ const DEFAULT = {
     'Nečitelné ruční poznámky: cue 12 (Lysandr/Hermie), cue 13 („… triangl“), cue 21 (kdo zvoní). PUK Round 2 je na str. 43, která není vyfocená.',
     '',
     'Označení cue = označení skladby ve Studio One (značka a název stopy), pořadí řádků = pořadí na časové ose. Původní čísla z režijní knihy u cue 01–04 jsou o jedna posunutá (01a a 01b jsou dvě skladby) a jsou uvedená v poznámce. Řádky se stavem Ověřit: přiřazení stopy k textu cue je odhad nebo pokyn není zadán. Duplicity (09a/b, 12a/b, 29/29b, 32a/b) se rozhodnou později. Řádky bez stopy ve Studio One jsou označené.',
+    'Označení cue = označení skladby ve Studio One (značka a název stopy), pořadí řádků = pořadí na časové ose. Původní čísla z režijní knihy u cue 01–04 jsou o jedna posunutá (01a a 01b jsou dvě skladby) a jsou uvedená v poznámce. Řádky se stavem Ověřit: přiřazení stopy k textu cue je odhad nebo pokyn není zadán. Duplicity (09a/b, 12a/b, 29/29b, 32a/b) leží ve Studio One na stejném začátku, delší verze určuje, kdy začne další skladba, kratší je ztlumená a jedna z nich se později vyhodí. Skladby xx jsou nepoužité a leží za závěrem. Řádky bez stopy ve Studio One jsou označené.',
     'Tracky uvedené ve scénáři: 04_prichod Puka (05), 04a full (06), 05_var 1 / 1a (11), 06 (14), 07_2 (15), 08 (21).'
   ].join('\n'),
   cues: [
-    ["01a","","Začátek představení, pouští zvukař","01a_Uvod","Režijní kniha: cue 01",""],
+    ["01a","","Začátek představení, pouští zvukař","01a_Uvod","01a a 01b jsou dvě různé skladby za sebou (možná se později sloučí do jednoho řádku)\nRežijní kniha: cue 01",""],
     ["01b","","Hned po 01","01b_Uvod","Fade, až všichni zmizí ze scény\nRežijní kniha: cue 02",""],
     ["02","","Helca se podívá na Denisu","02_Cinknuti\nCinknutí","Režijní kniha: cue 03",""],
     ["03","","Při odchodu","03_Bubny\nBubny","Michal zastaví gestem\nRežijní kniha: cue 04",""],
@@ -122,14 +123,14 @@ const DEFAULT = {
     ["07","~19","Moje poznámky: Markéta vyskočí.\nScénář: po Titanii „Nedám ho ani za království víl.“","07_klidna_Titanie\nJemná, možná indický motiv (?)","","overit"],
     ["08","20","Oberon „Vydej mi chlapce, potom půjdu s vámi.“","08Glize__spravna_delka\nKroužení jako na str. 18 (ručně „06+08“ = stejná hudba jako 06)","",""],
     ["09a","21","Puk „…a hned jsem zpět.“, Puk odchází","09a_Puk_zlobi_prodlouzeny\nMožná Pukova zlobivá hudba","Číslo 09 tu není napsané, jen v poznámce „09+12“ na str. 28\nDuplicita s 09b: rozhodnout, která verze zůstane","overit"],
-    ["09b","","Totéž místo jako 09a (kratší verze)","09b_Puk_zlobi","","overit"],
+    ["09b","","Stejný začátek jako 09a, kratší verze (ve Studio One ztlumená)","09b_Puk_zlobi","Jedna z verzí 09a/09b se vyhodí. Další skladba začíná po delší verzi (09a).","overit"],
     ["10","24","Puk „Tady je, pane.“","10_bylina_v2\nJingl byliny","Opakuje se u byliny (13, 20)",""],
     ["11","25","Začátek Scény 2 „Jinde v lese“","11_Titanie_jde_spat_delsi\nUsnutí Titanie, 05_var 1 nebo 1a, 30–40 s","Titanie přichází a uléhá, spot. Ručně „40 s, pak Oberon“. S příchodem Oberona se hudba mění (?). Konec po „…za miláčka měj ho ty.“",""],
     ["12a","27","Lysandr a Hermie usnou, před vstupem Puka","12a_Puk_zlobi_prodlouzeny\nZlobivý Puk, krátce","Ručně (nejisté čtení): „Lysandr …, pak pusa; Hermie pusu nedá, pak hudba“\nDuplicita s 12b: rozhodnout, která verze zůstane",""],
-    ["12b","","Totéž místo jako 12a (kratší verze)","12b_Puk_zlobi","","overit"],
+    ["12b","","Stejný začátek jako 12a, kratší verze (ve Studio One ztlumená)","12b_Puk_zlobi","Jedna z verzí 12a/12b se vyhodí. Další skladba začíná po delší verzi (12a).","overit"],
     ["13","28","Puk kape šťávu Lysandrovi na víčka","13_bylina_v2\nJingl byliny","Nahoře na str. ručně „[nečitelné] triangl“. Po odchodu Puka možná znovu zlobivý Puk krátce („09+12“)",""],
     ["14b","~30–31","Moje poznámky: Helca odchází po „Umřu, když nenajdu hned svoji lásku“.\nScénář: skladba nastupuje už po „…a tys byl tu a jen ses usmíval.“","14b_Temny_les_dlouhy310\nDramatická, nebezpečný les, 06 → se vstupem řemeslníků (Jednání 3) změna na veselou","Fade do nuly, když se Andy pohraje s trávou","overit"],
-    ["L","","","Láska","Pokyn nezadán – ve Studio One je stopa za 14b","overit"],
+    ["L","","","Láska","Extra skladba mimo číslování. Ve Studio One leží za 14b, pokyn zatím není zadán.","overit"],
     ["15","~33","Poříz „…pomoc! Pomoc!“; podle mých poznámek až Lucka zmizí dozadu","15_Puk_zlobi_honi_remesniky_prodlouzene\nRychlá, zlobivý Puk, 07_2","Končí, až se schovají. Znovu jede, když přijde Lucka a Jarda se začne děsit",""],
     ["–","34","Klubko zpívá „Byl jeden kos…“","(bez stopy ve Studio One)\n„Možná hudba dle projevu herce?“","Bez čísla, otevřené","overit"],
     ["16","","","(bez stopy ve Studio One)","Nikde neuvedeno","overit"],
@@ -151,10 +152,14 @@ const DEFAULT = {
     ["27a","","Theseus „…má paní poslechne si koncert psů.“","27a_ptaci\nPsi z repra + zvuk lesa","Se změnou světla\nPsi (27b) jsou zvlášť v dalším řádku",""],
     ["27b","","","27b_psi","Pokyn nezadán – viz 27a","overit"],
     ["28","75","„Umírám, rám, rám, rám.“","28_Minotaur’s Boxing Pulse\nPíseň Hare rama (choreo)","Přeškrtnuto velkým X, asi zrušeno. Číslo 28 není potvrzené","overit"],
-    ["29","77","Theseus „A teď ten bergamský tanec.“ (Patrik)","29_Pukova_pisen_Market_v1 (alternativa 29b_Pukova_pisen_vys)\nModerní tanec / rap se slovy ke SNU","Pak ve scénáři bez čísla: změna na jemný lesní motiv (?)","overit"],
+    ["29","77","Theseus „A teď ten bergamský tanec.“ (Patrik)","29_Pukova_pisen_Market_v1\nModerní tanec / rap se slovy ke SNU","Pak ve scénáři bez čísla: změna na jemný lesní motiv (?)","overit"],
+    ["29b","","Stejný začátek jako 29 (alternativa, ve Studio One ztlumená)","29b_Pukova_pisen_vys","Jedna z verzí 29/29b se vyhodí.","overit"],
     ["30","77","Při odchodu herců, když zůstanou jen páry","30_Milenci\nKlidná hudba (Puk pozoruje páry)","Fade podle Markéty. Scénář: konec hudby, až odejdou všichni","overit"],
     ["31","~78","Puk „…abych zametl koštětem.“, na začátku zametání","31_Titanie+Oberon_tanec\nAmbient","Běží přes píseň Oberona a Titanie („hudba tanec O+T, ale oni netančí“), končí na zhasnutí u „nebezpečí“",""],
-    ["32b","79","Hned na „…mnohem víc než nebezpečí.“","32b_Zaver (alternativa 32a_Zaver)\nSkok na další skladbu, mění se v hudbu z úvodu","Ručně „hudba → spot žebřík“",""]
+    ["32b","79","Hned na „…mnohem víc než nebezpečí.“","32b_Zaver\nSkok na další skladbu, mění se v hudbu z úvodu","Ručně „hudba → spot žebřík“",""],
+    ["32a","","Stejný začátek jako 32b (kratší alternativa, ve Studio One ztlumená)","32a_Zaver","Jedna z verzí 32a/32b se vyhodí.","overit"],
+    ["xx","","","xx_Oberon_angry sad","Nepoužitá skladba, ve Studio One za závěrem a ztlumená",""],
+    ["xx","","","xx_Oberon_general_theme","Nepoužitá skladba, ve Studio One za závěrem a ztlumená",""]
   ].map(([cue, str, go, hudba, konec, stav]) => ({cue, str, go, hudba, konec, stav}))
 };
 
