@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sen – cue list zvuk</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --card: #fff; --ink: #1d1d1b; --mute: #6b6a66; --line: #dddad3;
+    --accent: #2f5d8a; --warn: #f9eeda; --warn-ink: #8a5a00; --bad: #fbebeb; --bad-ink: #9b2c2c; --ok: #e5f4e4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --card: #1f1f1d; --ink: #ecebe7; --mute: #9a9892; --line: #34332f;
+      --accent: #7fb0e0; --warn: #3a2f17; --warn-ink: #f0c36b; --bad: #3a1c1c; --bad-ink: #f19a9a; --ok: #1c3220; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--ink); }
+  header { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); padding: 10px 14px; }
+  h1 { font-size: 18px; margin: 0 0 6px; }
+  .sub { color: var(--mute); font-size: 13px; margin: 0 0 8px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  button, select, input[type=search] { font: inherit; font-size: 14px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  input[type=search] { flex: 1 1 160px; min-width: 120px; }
+  #saved { color: var(--mute); font-size: 12px; margin-left: auto; }
+  main { padding: 12px 14px 60px; max-width: 1400px; margin: 0 auto; }
+  table { width: 100%; border-collapse: collapse; background: var(--card); }
+  th, td { border: 1px solid var(--line); vertical-align: top; padding: 0; }
+  th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: var(--mute); padding: 6px 8px; background: var(--bg); }
+  td textarea, td input, td select { width: 100%; border: 0; background: transparent; color: inherit; font: inherit; padding: 6px 8px; resize: none; overflow: hidden; display: block; }
+  td textarea:focus, td input:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+  td.cue input { font-weight: 700; font-size: 16px; }
+  col.c-cue { width: 64px; } col.c-str { width: 64px; } col.c-stav { width: 112px; } col.c-act { width: 92px; }
+  tr.s-overit td { background: var(--warn); }
+  tr.s-zruseno td { background: var(--bad); }
+  tr.s-zruseno td textarea { text-decoration: line-through; color: var(--mute); }
+  tr.s-ok td.stav { background: var(--ok); }
+  .act { display: flex; gap: 2px; padding: 4px; }
+  .act button { padding: 2px 6px; font-size: 13px; }
+  h2 { font-size: 16px; margin: 22px 0 6px; }
+  #notes { width: 100%; min-height: 160px; font: inherit; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); }
+  .hint { color: var(--mute); font-size: 12px; margin-top: 6px; }
+  input[type=file] { display: none; }
+
+  /* úzký displej: řádky jako karty */
+  @media (max-width: 760px) {
+    table, thead, tbody, tr, td { display: block; width: 100%; }
+    thead, colgroup { display: none; }
+    tr { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 10px; overflow: hidden; background: var(--card); }
+    td { border: 0; border-top: 1px solid var(--line); }
+    td:first-child { border-top: 0; }
+    td::before { content: attr(data-l); display: block; font-size: 11px; text-transform: uppercase; color: var(--mute); padding: 6px 8px 0; }
+  }
+  @media print {
+    header .bar, .act, td.actc, th.actc, .hint { display: none !important; }
+    header { position: static; border: 0; }
+    body { background: #fff; color: #000; font-size: 11px; }
+    tr { break-inside: avoid; }
+    td textarea { overflow: visible; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Sen – hudební cue list</h1>
+  <p class="sub">Playback ze Studio One (macOS), detaily jsou v projektu. Ukládá se automaticky v tomhle prohlížeči; pro sdílení ulož soubor <code>.sen-cue.json</code>.</p>
+  <div class="bar">
+    <input type="search" id="q" placeholder="Hledat (cue, replika, track…)">
+    <select id="fstav">
+      <option value="">Vše</option>
+      <option value="overit">Jen k ověření</option>
+      <option value="ok">Jen OK</option>
+      <option value="zruseno">Jen zrušené</option>
+    </select>
+    <button class="primary" id="add">+ Cue</button>
+    <button id="exp">Uložit soubor</button>
+    <button id="imp">Načíst soubor</button>
+    <button id="csv">CSV</button>
+    <button id="prn">Tisk</button>
+    <button id="reset">Výchozí data</button>
+    <span id="saved"></span>
+    <input type="file" id="file" accept=".json,application/json">
+  </div>
+</header>
+<main>
+  <table>
+    <colgroup><col class="c-cue"><col class="c-str"><col><col><col><col class="c-stav"><col class="c-act"></colgroup>
+    <thead><tr><th>Cue</th><th>Str.</th><th>GO (kdy spustit)</th><th>Hudba / track</th><th>Konec / poznámky</th><th>Stav</th><th class="actc"></th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <h2>K ověření / poznámky</h2>
+  <textarea id="notes"></textarea>
+  <p class="hint">Barvy řádků: žlutá = ověřit, červená = zrušeno. Šipkami ↑↓ se mění pořadí, × maže řádek.</p>
+</main>
+
+<script>
+const KEY = 'sen-cue.v1';
+
+const DEFAULT = {
+  title: 'Sen – hudební cue list',
+  notes: [
+    'Cue 05–07: číslování nesedí. V mých poznámkách je přestavba cue 06 (3 min), ve scénáři cue 05 (60–90 s, 04_prichod Puka). Vypadá to na posun o jedno. Od cue 14 se čísla shodují. Ověřit, které číslování mají markery ve Studio One.',
+    'Délka přestavby: 3 min (moje poznámky) vs. 60–90 s (scénář).',
+    'Cue 14: scénář spouští skladbu 06 už po „…jen ses usmíval.“, moje poznámky až při odchodu Helcy po „Umřu, když nenajdu hned svoji lásku“.',
+    'Cue 17: spouštěcí replika se liší („miluji tě, co víc bych měla říct“ vs. „Na moje lože odvedu tě teď.“).',
+    'Chybějící čísla: 16, 24 a 25 nejsou nikde. 19 (Queen) a 28 (Hare rama) jsou nejspíš zrušené. 09 je jen v poznámce „09+12“.',
+    'Cue 01–04 jsou jen z mých poznámek, stránky scénáře před str. ~16 nejsou vyfocené.',
+    'Nečitelné ruční poznámky: cue 12 (Lysandr/Hermie), cue 13 („… triangl“), cue 21 (kdo zvoní). PUK Round 2 je na str. 43, která není vyfocená.',
+    '',
+    'Tracky uvedené ve scénáři: 04_prichod Puka (05), 04a full (06), 05_var 1 / 1a (11), 06 (14), 07_2 (15), 08 (21).'
+  ].join('\n'),
+  cues: [
+    ['01','','Začátek představení, pouští zvukař','','',''],
+    ['02','','Hned po 01','','Fade, až všichni zmizí ze scény',''],
+    ['03','','Helca se podívá na Denisu','Cinknutí','',''],
+    ['04','','Při odchodu','Bubny','Michal zastaví gestem',''],
+    ['05','~16','Moje poznámky: přichází Andy s basketbalovým míčem.\nScénář: po Pořízově „Zejtra u knížecího dubu.“, přestavba s čelovkami','Scénář: motiv Puka, 60–90 s, 04_prichod Puka','Puk vejde, pozoruje řemeslníky, pak monolog. Číslování nesedí – viz K ověření','overit'],
+    ['06','~17–18','Moje poznámky: přestavba.\nScénář: po Pukově „…pivo jí chrstnu rovnou na podbradek.“','Moje poznámky: přestavba celé 3 min, nahlas (přebít hluk).\nScénář: dramatická, 04a full','Scénář: Puk se schová do praktikáblu, Oberon + Titanie kroužení na hudbu','overit'],
+    ['07','~19','Moje poznámky: Markéta vyskočí.\nScénář: po Titanii „Nedám ho ani za království víl.“','Jemná, možná indický motiv (?)','','overit'],
+    ['08','20','Oberon „Vydej mi chlapce, potom půjdu s vámi.“','Kroužení jako na str. 18 (ručně „06+08“ = stejná hudba jako 06)','',''],
+    ['09','21','Puk „…a hned jsem zpět.“, Puk odchází','Možná Pukova zlobivá hudba','Číslo 09 tu není napsané, jen v poznámce „09+12“ na str. 28','overit'],
+    ['10','24','Puk „Tady je, pane.“','Jingl byliny','Opakuje se u byliny (13, 20)',''],
+    ['11','25','Začátek Scény 2 „Jinde v lese“','Usnutí Titanie, 05_var 1 nebo 1a, 30–40 s','Titanie přichází a uléhá, spot. Ručně „40 s, pak Oberon“. S příchodem Oberona se hudba mění (?). Konec po „…za miláčka měj ho ty.“',''],
+    ['12','27','Lysandr a Hermie usnou, před vstupem Puka','Zlobivý Puk, krátce','Ručně (nejisté čtení): „Lysandr …, pak pusa; Hermie pusu nedá, pak hudba“',''],
+    ['13','28','Puk kape šťávu Lysandrovi na víčka','Jingl byliny','Nahoře na str. ručně „[nečitelné] triangl“. Po odchodu Puka možná znovu zlobivý Puk krátce („09+12“)',''],
+    ['14','~30–31','Moje poznámky: Helca odchází po „Umřu, když nenajdu hned svoji lásku“.\nScénář: skladba nastupuje už po „…a tys byl tu a jen ses usmíval.“','Dramatická, nebezpečný les, 06 → se vstupem řemeslníků (Jednání 3) změna na veselou','Fade do nuly, když se Andy pohraje s trávou','overit'],
+    ['15','~33','Poříz „…pomoc! Pomoc!“; podle mých poznámek až Lucka zmizí dozadu','Rychlá, zlobivý Puk, 07_2','Končí, až se schovají. Znovu jede, když přijde Lucka a Jarda se začne děsit',''],
+    ['–','34','Klubko zpívá „Byl jeden kos…“','„Možná hudba dle projevu herce?“','Bez čísla, otevřené','overit'],
+    ['16','','','','Nikde neuvedeno','overit'],
+    ['17','~36','Moje poznámky: Titanie říká „miluji tě, co víc bych měla říct“ a odcházejí.\nScénář: před „Na moje lože odvedu tě teď.“','Milostná, „zvířecí“','4–5 s','overit'],
+    ['17a','~36','Odejdou, přichází Patrik','Změna hudby, přechod v Oberonův motiv (scénář „přejde v Oberona?“)','',''],
+    ['–','39','Po „…jako večernice!“','Ručně jen „hudba“','Bez čísla','overit'],
+    ['18','39','Puk uspí Demetria po „…se nikam trmácet.“','Krátký motiv Puka – „cink“','Opakuje se při každém uspávání',''],
+    ['19','42','„Zasloužíte ovace!“','Rytmický skeč na Queen','Ručně „asi pryč“. Číslo 19 není potvrzené','zruseno'],
+    ['20','44','„Třešničky dvě, však šťopka jediná“','Jingl byliny, ručně „možná Lysandrova hudba“','Pak 2× cinknutí OZ: po „…vychutnám jen já.“ a po „…mé oči!“. U „Proč vášní – vášní – zahrnuje mne!“ poznámka „L. svůdná hudba?“',''],
+    ['21','~45','Hermie „Vůbec ti nerozumím, Heleno!“','Box cca 45 s, track 08, PUK Round 1','Světlo jen na L+D. Ručně: „[nečitelné] zazvoní → zastaví hudbu, znovu → pustí hudbu“',''],
+    ['22','~46','„Tak loutka! Už vím, odkud vítr fouká.“ (šipkou přesunuto z „Já jsem jen zákrsek…“)','Box, PUK Round 3','Round 2 je na str. 43, která není vyfocená',''],
+    ['23','~49–52','Puk navádí milence rukou','Hudba Puk','Str. 51 možná echo z repra. Bez čísla ještě na str. 51 (Demetrius) a 52 (Helena, Hermie)',''],
+    ['24','','','','Nikde neuvedeno','overit'],
+    ['25','','','','Nikde neuvedeno','overit'],
+    ['–','J4','Klubko „…na kleště a na kosti.“','Nerytmická hudba, ploužák Titanie + Klubko','Bez čísla','overit'],
+    ['26','','Titanie „Hrej, hudbo, hrej a hleď je zkolébat.“','Tiše, spánek','Předtím cinknutí při kapání šťávy Titanii. Po Oberonově „Hrej, hudbo, hrej.“ hraje do tance',''],
+    ['26a','','Odejdou Oberon + Titanie, přijde Puk','Hudba zesílí, Puk dělá choreo','Vyplňuje čas na převlečení Thesea a Hippolyty',''],
+    ['27','','Theseus „…má paní poslechne si koncert psů.“','Psi z repra + zvuk lesa','Se změnou světla',''],
+    ['28','75','„Umírám, rám, rám, rám.“','Píseň Hare rama (choreo)','Přeškrtnuto velkým X, asi zrušeno. Číslo 28 není potvrzené','zruseno'],
+    ['29','77','Theseus „A teď ten bergamský tanec.“ (Patrik)','Moderní tanec / rap se slovy ke SNU','Pak ve scénáři bez čísla: změna na jemný lesní motiv (?)',''],
+    ['30','77','Při odchodu herců, když zůstanou jen páry','Klidná hudba (Puk pozoruje páry)','Fade podle Markéty. Scénář: konec hudby, až odejdou všichni',''],
+    ['31','~78','Puk „…abych zametl koštětem.“, na začátku zametání','Ambient','Běží přes píseň Oberona a Titanie („hudba tanec O+T, ale oni netančí“), končí na zhasnutí u „nebezpečí“',''],
+    ['32','79','Hned na „…mnohem víc než nebezpečí.“','Skok na další skladbu, mění se v hudbu z úvodu','Ručně „hudba → spot žebřík“','']
+  ].map(([cue, str, go, hudba, konec, stav]) => ({cue, str, go, hudba, konec, stav}))
+};
+
+const STAVY = [['', '–'], ['ok', 'OK'], ['overit', 'Ověřit'], ['zruseno', 'Zrušeno']];
+const COLS = [['cue','Cue'], ['str','Str.'], ['go','GO'], ['hudba','Hudba / track'], ['konec','Konec / poznámky']];
+
+let data;
+function load() {
+  try { const s = localStorage.getItem(KEY); if (s) return JSON.parse(s); } catch (e) {}
+  return structuredClone(DEFAULT);
+}
+let saveTimer;
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {}
+  const t = new Date();
+  document.getElementById('saved').textContent = 'Uloženo ' + t.toLocaleTimeString('cs-CZ', {hour: '2-digit', minute: '2-digit'});
+}
+function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 300); }
+
+function grow(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
+
+const tbody = document.getElementById('rows');
+
+function render() {
+  tbody.textContent = '';
+  const q = document.getElementById('q').value.trim().toLowerCase();
+  const fs = document.getElementById('fstav').value;
+  data.cues.forEach((c, i) => {
+    if (fs && c.stav !== fs) return;
+    if (q && !COLS.some(([k]) => (c[k] || '').toLowerCase().includes(q))) return;
+    const tr = document.createElement('tr');
+    tr.className = c.stav ? 's-' + c.stav : '';
+    COLS.forEach(([k, label]) => {
+      const td = document.createElement('td');
+      td.dataset.l = label;
+      if (k === 'cue') td.className = 'cue';
+      let el;
+      if (k === 'cue' || k === 'str') {
+        el = document.createElement('input');
+      } else {
+        el = document.createElement('textarea');
+        el.rows = 1;
+        el.addEventListener('input', () => grow(el));
+      }
+      el.value = c[k] || '';
+      el.addEventListener('input', () => { c[k] = el.value; saveSoon(); });
+      td.appendChild(el);
+      tr.appendChild(td);
+    });
+    const tdS = document.createElement('td');
+    tdS.className = 'stav'; tdS.dataset.l = 'Stav';
+    const sel = document.createElement('select');
+    STAVY.forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; sel.appendChild(o); });
+    sel.value = c.stav || '';
+    sel.addEventListener('change', () => { c.stav = sel.value; tr.className = c.stav ? 's-' + c.stav : ''; save(); });
+    tdS.appendChild(sel);
+    tr.appendChild(tdS);
+    const tdA = document.createElement('td');
+    tdA.className = 'actc'; tdA.dataset.l = 'Úpravy';
+    const act = document.createElement('div'); act.className = 'act';
+    const mk = (txt, title, fn) => { const b = document.createElement('button'); b.textContent = txt; b.title = title; b.onclick = fn; act.appendChild(b); };
+    mk('↑', 'Posunout nahoru', () => move(i, -1));
+    mk('↓', 'Posunout dolů', () => move(i, 1));
+    mk('+', 'Vložit řádek pod', () => insertAt(i + 1));
+    mk('×', 'Smazat řádek', () => { if (confirm('Smazat cue ' + (c.cue || '') + '?')) { data.cues.splice(i, 1); save(); render(); } });
+    tdA.appendChild(act);
+    tr.appendChild(tdA);
+    tbody.appendChild(tr);
+  });
+  requestAnimationFrame(() => tbody.querySelectorAll('textarea').forEach(grow));
+}
+
+function move(i, d) {
+  const j = i + d;
+  if (j < 0 || j >= data.cues.length) return;
+  [data.cues[i], data.cues[j]] = [data.cues[j], data.cues[i]];
+  save(); render();
+}
+function insertAt(i) {
+  data.cues.splice(i, 0, {cue: '', str: '', go: '', hudba: '', konec: '', stav: ''});
+  save(); render();
+  const r = tbody.children[Math.min(i, tbody.children.length - 1)];
+  if (r) r.querySelector('input').focus();
+}
+
+const notes = document.getElementById('notes');
+notes.addEventListener('input', () => { data.notes = notes.value; grow(notes); saveSoon(); });
+
+function download(name, text, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], {type}));
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function stamp() { return new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', ''); }
+
+document.getElementById('add').onclick = () => insertAt(data.cues.length);
+document.getElementById('q').oninput = render;
+document.getElementById('fstav').onchange = render;
+document.getElementById('prn').onclick = () => { document.getElementById('q').value = ''; document.getElementById('fstav').value = ''; render(); setTimeout(() => window.print(), 50); };
+document.getElementById('exp').onclick = () => {
+  data.saved = new Date().toISOString();
+  download('sen-cue_' + stamp() + '.sen-cue.json', JSON.stringify(data, null, 2), 'application/json');
+};
+document.getElementById('csv').onclick = () => {
+  const esc = v => '"' + String(v || '').replace(/"/g, '""') + '"';
+  const head = ['Cue', 'Str.', 'GO', 'Hudba / track', 'Konec / poznámky', 'Stav'];
+  const lines = [head.map(esc).join(';')].concat(data.cues.map(c =>
+    [c.cue, c.str, c.go, c.hudba, c.konec, (STAVY.find(s => s[0] === (c.stav || '')) || ['', ''])[1]].map(esc).join(';')));
+  download('sen-cue_' + stamp() + '.csv', '﻿' + lines.join('\r\n'), 'text/csv');
+};
+const file = document.getElementById('file');
+document.getElementById('imp').onclick = () => file.click();
+file.onchange = () => {
+  const f = file.files[0]; if (!f) return;
+  f.text().then(t => {
+    const d = JSON.parse(t);
+    if (!d || !Array.isArray(d.cues)) throw new Error('chybí cues');
+    if (!confirm('Načíst „' + f.name + '“? Přepíše aktuální data v tomhle prohlížeči.')) return;
+    data = {title: d.title || DEFAULT.title, notes: d.notes || '', cues: d.cues.map(c => ({
+      cue: c.cue || '', str: c.str || '', go: c.go || '', hudba: c.hudba || '', konec: c.konec || '', stav: c.stav || ''}))};
+    init();
+    save();
+  }).catch(e => alert('Soubor se nepodařilo načíst: ' + e.message)).finally(() => { file.value = ''; });
+};
+document.getElementById('reset').onclick = () => {
+  if (!confirm('Vrátit výchozí data? Tvoje úpravy v tomhle prohlížeči se přepíšou (ulož si je předtím do souboru).')) return;
+  data = structuredClone(DEFAULT); init(); save();
+};
+
+function init() {
+  document.getElementById('title').textContent = data.title || DEFAULT.title;
+  notes.value = data.notes || '';
+  render();
+  requestAnimationFrame(() => grow(notes));
+}
+
+data = load();
+init();
+</script>
+</body>
+</html>
